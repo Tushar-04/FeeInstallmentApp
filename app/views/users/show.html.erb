@@ -1,0 +1,78 @@
+<h1><%= @user.name %></h1>
+
+<h3>Installment Structure:</h3>
+<ul>
+  <% first_pending_installment = @installments.unpaid.first %>
+
+  <% @installments.each_with_index do |installment, index| %>
+    <li>
+      Installment <%= index + 1 %>: 
+      Amount: <%= number_to_currency(installment.amount) %>, 
+
+      Status: <%= installment.status == 'paid' ? 'Paid' : 'Pending' %>
+
+      <% if installment.id == first_pending_installment&.id %>
+        <%= form_with(url: user_fee_installments_path(@user), method: :patch, local: true) do |form| %>
+          <%= hidden_field_tag :installment_id, installment.id %>
+          <%= number_field_tag :payment, nil, min: '0', required: true, id: 'payment_amount' %>
+
+          <% # Pass installment amount to JavaScript using a data attribute %>
+          <%= select_tag :adjustment, options_for_select([]), required: true, id: 'adjustment_select', data: { installment_amount: installment.amount } %>
+
+          <%= form.submit "Pay" %>
+        <% end %>
+      <% else %>
+        <%= form_with(url: user_fee_installments_path(@user), method: :patch, local: true, html: { disabled: true }) do |form| %>
+          <%= hidden_field_tag :installment_id, installment.id %>
+          <%= number_field_tag :payment, nil, disabled: true %>
+          <%= select_tag :adjustment, options_for_select([]), disabled: true %>
+          <%= form.submit "Pay", disabled: true %>
+        <% end %>
+      <% end %>
+    </li>
+  <% end %>
+</ul>
+
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    const paymentField = document.getElementById('payment_amount');
+    const adjustmentSelect = document.getElementById('adjustment_select');
+    const installmentAmount = parseFloat(adjustmentSelect.dataset.installmentAmount) || 0;
+
+    paymentField.addEventListener('input', function() {
+      const paymentAmount = parseFloat(paymentField.value) || 0;
+      let options = [];
+
+      if (paymentAmount < installmentAmount) {
+        options = [
+          ['Adjust remaining amount next installment', 'adjust_remaining'], 
+          ['Create new installment for remaining amount', 'new']
+        ];
+      } else if (paymentAmount > installmentAmount) {
+        options = [
+          ['Adjust extra amount to next installment', 'adjust_extra']
+        ];
+      } else {
+        options = [
+          ['No adjustment required', 'none']
+        ];
+      }
+
+      adjustmentSelect.innerHTML = '';
+      options.forEach(([text, value]) => {
+        const option = document.createElement('option');
+        option.value = value;
+        option.text = text;
+        adjustmentSelect.appendChild(option);
+      });
+    });
+
+    // Display flash messages as alerts
+    <% if flash[:notice] %>
+      alert("<%= j flash[:notice] %>");
+    <% end %>
+    <% if flash[:alert] %>
+      alert("<%= j flash[:alert] %>");
+    <% end %>
+  });
+</script>
